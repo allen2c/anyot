@@ -1,11 +1,12 @@
+# ./tempo-local.yaml
 server:
-  http_listen_port: 3200
+  http_listen_port: 3200 # Tempo's own API/UI port
 
 distributor:
   receivers:
     otlp:
       protocols:
-        grpc:
+        grpc: # Tempo will listen for OTLP/gRPC here
           endpoint: 0.0.0.0:55680
 
 storage:
@@ -16,7 +17,8 @@ storage:
 
 compactor:
   compaction:
-    block_retention: 48h
+    block_retention: 48h # How long to keep blocks before compacting
 
+# Optional: Enable service graph and span metrics generation
 overrides:
   metrics_generator_processors: [service-graphs, span-metrics]

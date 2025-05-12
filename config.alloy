@@ -1,20 +1,42 @@
-server:
-  http_listen_port: 12345
+// ./config.alloy
 
-receivers:
-  otlp:
-    protocols:
-      http:
-        endpoint: 0.0.0.0:4318
-      grpc:
-        endpoint: 0.0.0.0:4317
+// Configure Alloy's own server for UI and API
+server {
+  http_listen_address = "0.0.0.0"
+  http_listen_port    = 12345
+}
 
-exporters:
-  tempo:
-    endpoint: tempo:3200
+// OTLP Receiver:
+// Listens for OTLP data from your application and other potential sources.
+otelcol.receiver.otlp "app_traces" {
+  // HTTP endpoint for your Python application
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
 
-pipeline:
-  - name: traces
-    receivers: [otlp]
-    processors: []
-    exporters: [tempo]
+  // Optional: gRPC endpoint if you have other services sending OTLP/gRPC to Alloy
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  // Send all traces received by this component to the 'tempo_exporter'.
+  output {
+    traces = [otelcol.exporter.otlp.tempo_exporter.input]
+  }
+}
+
+// OTLP Exporter:
+// Sends traces from Alloy to your Tempo instance.
+otelcol.exporter.otlp "tempo_exporter" {
+  client {
+    // Address of Tempo's OTLP/gRPC endpoint.
+    // 'tempo' is the service name from docker-compose, '55680' is Tempo's gRPC port.
+    endpoint = "tempo:55680"
+
+    // Assuming no TLS between Alloy and Tempo on the internal Docker network.
+    // For production, you would configure TLS.
+    tls {
+      insecure = true
+    }
+  }
+}
