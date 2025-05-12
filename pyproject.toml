@@ -6,6 +6,7 @@ dependencies = [
   "opentelemetry-exporter-otlp (>=1.33,<2)",
   "opentelemetry-sdk (>=1.33,<2)",
   "pydantic (>=2,<3)",
+  "str-or-none (>=0.1.0,<1)",
 ]
 description = ""
 license = { text = "MIT" }
@@ -25,3 +26,10 @@ pytest = "^8.3.5"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"
+
+[tool.isort]
+profile = "black"
+
+[tool.flake8]
+ignore = ["E203", "E704", "W503"]
+max-line-length = 88
