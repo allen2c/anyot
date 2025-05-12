@@ -17,7 +17,7 @@ services:
     container_name: tempo
     command: -config.file=/etc/tempo-local.yaml
     volumes:
-      - ./tempo-local.yaml:/etc/tempo-local.yaml
+      - ./tempo-local.yaml:/etc/tempo-local.yaml:ro
     ports:
       - "55680:55680"   # OTLP gRPC endpoint
       - "3200:3200"     # Tempo query API
@@ -28,7 +28,7 @@ services:
     image: grafana/alloy:latest
     container_name: alloy
     volumes:
-      - ./config.alloy:/etc/alloy/config.alloy
+      - ./config.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy/data
     ports:
       - "12345:12345"   # Alloy UI & pipeline debugging
