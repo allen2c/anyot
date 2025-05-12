@@ -1,11 +1,5 @@
 // ./config.alloy
 
-// Configure Alloy's own server for UI and API
-server {
-  http_listen_address = "0.0.0.0"
-  http_listen_port    = 12345
-}
-
 // OTLP Receiver:
 // Listens for OTLP data from your application and other potential sources.
 otelcol.receiver.otlp "app_traces" {
