@@ -4,6 +4,7 @@ import pathlib
 import typing
 from typing import Dict, Optional
 
+import logfire
 import opentelemetry.sdk.resources
 import opentelemetry.sdk.trace
 import opentelemetry.trace
@@ -28,14 +29,47 @@ def get_otel_exporter_otlp_endpoint(
     if otel_exporter_otlp_endpoint is None:
         otel_exporter_otlp_endpoint = str_or_none(
             os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", None)
-        ) or str_or_none(os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", None))
-
-    if raise_empty and otel_exporter_otlp_endpoint is None:
-        raise ValueError(
-            "OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is not set."  # noqa: E501
         )
 
+    if raise_empty and otel_exporter_otlp_endpoint is None:
+        raise ValueError("OTEL_EXPORTER_OTLP_ENDPOINT is not set.")  # noqa: E501
+
     return otel_exporter_otlp_endpoint
+
+
+def get_otel_exporter_otlp_traces_endpoint(
+    otel_exporter_otlp_traces_endpoint: typing.Optional[str] = None,
+    *,
+    otel_exporter_otlp_endpoint: typing.Optional[str] = None,
+    raise_empty: bool = False,
+) -> typing.Optional[str]:
+    if otel_exporter_otlp_traces_endpoint is None:
+        otel_exporter_otlp_traces_endpoint = str_or_none(
+            os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", None)
+        )
+
+    if otel_exporter_otlp_traces_endpoint is None:
+        otel_exporter_otlp_endpoint = get_otel_exporter_otlp_endpoint(
+            otel_exporter_otlp_endpoint, raise_empty=False
+        )
+        if otel_exporter_otlp_endpoint is not None:
+            otel_exporter_otlp_traces_endpoint = (
+                f"{otel_exporter_otlp_endpoint}/v1/traces"
+            )
+            logger.debug(
+                "Set OTel exporter traces endpoint from OTel endpoint: "
+                + f"{otel_exporter_otlp_traces_endpoint}"
+            )
+    else:
+        logger.debug(
+            "Set OTel exporter traces endpoint: "
+            + f"{otel_exporter_otlp_traces_endpoint}"
+        )
+
+    if raise_empty and otel_exporter_otlp_traces_endpoint is None:
+        raise ValueError("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is not set.")  # noqa: E501
+
+    return otel_exporter_otlp_traces_endpoint
 
 
 def get_resource(
@@ -66,13 +100,20 @@ def get_resource(
 def get_tracer_provider(
     *,
     otel_exporter_otlp_endpoint: typing.Optional[str] = None,
+    otel_exporter_otlp_traces_endpoint: typing.Optional[str] = None,
     otel_resource_attributes: typing.Optional[str] = None,
+    ping_otel_exporter_healthy: bool = True,
     raise_empty: bool = False,
 ) -> opentelemetry.trace.TracerProvider:
-    otel_exporter_otlp_endpoint = get_otel_exporter_otlp_endpoint(
-        otel_exporter_otlp_endpoint,
-        raise_empty=raise_empty,
+    otel_exporter_otlp_traces_endpoint = get_otel_exporter_otlp_traces_endpoint(
+        otel_exporter_otlp_traces_endpoint,
+        otel_exporter_otlp_endpoint=otel_exporter_otlp_endpoint,
+        raise_empty=False,
     )
+    if not otel_exporter_otlp_traces_endpoint and raise_empty:
+        raise ValueError(
+            "OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is not set."  # noqa: E501
+        )
 
     resource = get_resource(
         otel_resource_attributes,
@@ -82,23 +123,29 @@ def get_tracer_provider(
     provider = opentelemetry.sdk.trace.TracerProvider(resource=resource)
 
     otlp_exporter = OTLPSpanExporter(
-        endpoint=otel_exporter_otlp_endpoint,
+        endpoint=otel_exporter_otlp_traces_endpoint,
     )
 
-    is_otlp_exporter_healthy = ping_otel_exporter_otlp_endpoint(otlp_exporter._endpoint)
-    if not is_otlp_exporter_healthy:
-        raise ValueError(
-            f"OTEL_EXPORTER_OTLP_ENDPOINT is not healthy: {otel_exporter_otlp_endpoint}"
+    if ping_otel_exporter_healthy:
+        is_otlp_exporter_healthy = ping_otel_exporter_otlp_traces_endpoint(
+            otlp_exporter._endpoint
         )
+        if not is_otlp_exporter_healthy:
+            raise ValueError(
+                "OTel exporter traces endpoint is not healthy: "
+                + f"{otel_exporter_otlp_traces_endpoint}"
+            )
 
     provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
     return provider
 
 
-def ping_otel_exporter_otlp_endpoint(otel_exporter_otlp_endpoint: str) -> bool:
+def ping_otel_exporter_otlp_traces_endpoint(
+    otel_exporter_otlp_traces_endpoint: str,
+) -> bool:
     try:
-        res = requests.get(otel_exporter_otlp_endpoint)
+        res = requests.get(otel_exporter_otlp_traces_endpoint)
         res.raise_for_status()
         return True
     except requests.exceptions.HTTPError as e:
@@ -107,7 +154,7 @@ def ping_otel_exporter_otlp_endpoint(otel_exporter_otlp_endpoint: str) -> bool:
             return True
         return False
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error pinging OTEL_EXPORTER_OTLP_ENDPOINT: {e}")
+        logger.error(f"Error pinging OTel exporter traces endpoint: {e}")
         return False
     except Exception as e:
         logger.exception(e)
@@ -118,17 +165,34 @@ def configure(
     *,
     tracer_provider: typing.Optional[opentelemetry.trace.TracerProvider] = None,
     otel_exporter_otlp_endpoint: typing.Optional[str] = None,
-    otel_resource_attributes: typing.Optional[str] = None,
+    otel_resource_attributes: typing.Optional[
+        typing.Union["OtelResourceAttributes", str]
+    ] = None,
+    ping_otel_exporter_healthy: bool = True,
     raise_empty: bool = False,
 ):
+    otel_resource_attributes = (
+        OtelResourceAttributes.from_string(otel_resource_attributes)
+        if not isinstance(otel_resource_attributes, OtelResourceAttributes)
+        else otel_resource_attributes
+    )
+
     if tracer_provider is None:
         tracer_provider = get_tracer_provider(
             otel_exporter_otlp_endpoint=otel_exporter_otlp_endpoint,
-            otel_resource_attributes=otel_resource_attributes,
+            otel_resource_attributes=otel_resource_attributes.to_string(),
+            ping_otel_exporter_healthy=ping_otel_exporter_healthy,
             raise_empty=raise_empty,
         )
 
-    opentelemetry.trace.set_tracer_provider(tracer_provider)
+    # opentelemetry.trace.set_tracer_provider(tracer_provider)
+
+    logfire.configure(
+        send_to_logfire=False,
+        service_name=otel_resource_attributes.service_name,
+        service_version=otel_resource_attributes.service_version,
+        environment=otel_resource_attributes.deployment_environment,
+    )
 
     return None
 
