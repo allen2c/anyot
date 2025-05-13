@@ -335,6 +335,9 @@ class OtelResourceAttributes(BaseModel):
         attributes = {}
         custom_attributes = {}
 
+        # Get all field names from the model
+        model_fields = cls.model_fields.keys() if hasattr(cls, "model_fields") else {}
+
         for item in attr_string.split(","):
             if "=" in item:
                 key, value = item.split("=", 1)
@@ -344,8 +347,8 @@ class OtelResourceAttributes(BaseModel):
                 # Map to the pydantic model field names (convert dots to underscores)
                 mapped_key = key.replace(".", "_")
 
-                # Predefined attribute
-                if hasattr(cls, mapped_key):
+                # Check if this is a field in our model
+                if mapped_key in model_fields:
                     attributes[mapped_key] = value
                 else:
                     # Custom attribute
