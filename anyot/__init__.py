@@ -12,6 +12,7 @@ import requests
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import NoOpTracerProvider
 from pydantic import BaseModel, Field
 from str_or_none import str_or_none
 
@@ -104,6 +105,7 @@ def get_tracer_provider(
     otel_resource_attributes: typing.Optional[str] = None,
     ping_otel_exporter_healthy: bool = True,
     raise_empty: bool = False,
+    use_noop_tracer_provider_if_unhealthy: bool = True,
 ) -> opentelemetry.trace.TracerProvider:
     otel_exporter_otlp_traces_endpoint = get_otel_exporter_otlp_traces_endpoint(
         otel_exporter_otlp_traces_endpoint,
@@ -131,6 +133,13 @@ def get_tracer_provider(
             otlp_exporter._endpoint
         )
         if not is_otlp_exporter_healthy:
+            if use_noop_tracer_provider_if_unhealthy:
+                logger.warning(
+                    "OTel exporter traces endpoint is not healthy: "
+                    + f"{otel_exporter_otlp_traces_endpoint}, "
+                    + "using NoOpTracerProvider instead."
+                )
+                return NoOpTracerProvider()
             raise ValueError(
                 "OTel exporter traces endpoint is not healthy: "
                 + f"{otel_exporter_otlp_traces_endpoint}"
@@ -172,6 +181,7 @@ def configure(
     raise_empty: bool = False,
     use_logfire: bool = True,
     send_to_logfire: bool = False,
+    use_noop_tracer_provider_if_unhealthy: bool = True,
 ):
     otel_resource_attributes = (
         OtelResourceAttributes.from_string(otel_resource_attributes)
@@ -185,7 +195,17 @@ def configure(
             otel_resource_attributes=otel_resource_attributes.to_string(),
             ping_otel_exporter_healthy=ping_otel_exporter_healthy,
             raise_empty=raise_empty,
+            use_noop_tracer_provider_if_unhealthy=use_noop_tracer_provider_if_unhealthy,
         )
+
+    # If the tracer provider is a NoOpTracerProvider, we don't need to use logfire
+    if use_logfire and isinstance(tracer_provider, NoOpTracerProvider):
+        logger.warning(
+            "OTel exporter traces endpoint is not healthy, "
+            + "using NoOpTracerProvider instead, "
+            + "set `use_logfire=False` to disable logfire."
+        )
+        use_logfire = False
 
     if use_logfire:
         logfire.configure(
