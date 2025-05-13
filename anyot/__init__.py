@@ -170,6 +170,8 @@ def configure(
     ] = None,
     ping_otel_exporter_healthy: bool = True,
     raise_empty: bool = False,
+    use_logfire: bool = True,
+    send_to_logfire: bool = False,
 ):
     otel_resource_attributes = (
         OtelResourceAttributes.from_string(otel_resource_attributes)
@@ -185,14 +187,15 @@ def configure(
             raise_empty=raise_empty,
         )
 
-    # opentelemetry.trace.set_tracer_provider(tracer_provider)
-
-    logfire.configure(
-        send_to_logfire=False,
-        service_name=otel_resource_attributes.service_name,
-        service_version=otel_resource_attributes.service_version,
-        environment=otel_resource_attributes.deployment_environment,
-    )
+    if use_logfire:
+        logfire.configure(
+            send_to_logfire=send_to_logfire,
+            service_name=otel_resource_attributes.service_name,
+            service_version=otel_resource_attributes.service_version,
+            environment=otel_resource_attributes.deployment_environment,
+        )
+    else:
+        opentelemetry.trace.set_tracer_provider(tracer_provider)
 
     return None
 
