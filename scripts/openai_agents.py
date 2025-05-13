@@ -8,7 +8,7 @@ import json_repair
 import logfire
 import openai
 import pydantic
-from agents import FunctionTool, RunContextWrapper, handoff
+from agents import Agent, FunctionTool, RunContextWrapper, Runner, handoff
 from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 from openai.types.responses.easy_input_message_param import EasyInputMessageParam
 from rich import print
@@ -67,8 +67,6 @@ for tool in tools:
 
 
 def main():
-    from agents import Agent, Runner
-
     translation_agent = Agent(
         name="Translation Professor",
         instructions=prompt_with_handoff_instructions(
@@ -105,4 +103,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with logfire.span("openai-agents"):
+        main()
