@@ -18,6 +18,7 @@ opentelemetry-exporter-otlp-proto-http==1.33.0 ; python_version >= "3.11" and py
 opentelemetry-exporter-otlp==1.33.0 ; python_version >= "3.11" and python_version < "4"
 opentelemetry-instrumentation-asgi==0.54b0 ; python_version >= "3.11" and python_version < "4"
 opentelemetry-instrumentation-fastapi==0.54b0 ; python_version >= "3.11" and python_version < "4"
+opentelemetry-instrumentation-httpx==0.54b0 ; python_version >= "3.11" and python_version < "4"
 opentelemetry-instrumentation==0.54b0 ; python_version >= "3.11" and python_version < "4"
 opentelemetry-proto==1.33.0 ; python_version >= "3.11" and python_version < "4"
 opentelemetry-sdk==1.33.0 ; python_version >= "3.11" and python_version < "4"
