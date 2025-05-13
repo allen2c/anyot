@@ -1,7 +1,7 @@
 [project]
 authors = [{ name = "Allen Chou", email = "f1470891079@gmail.com" }]
 dependencies = [
-  "logfire (>=3,<4)",
+  "logfire[fastapi] (>=3,<4.0.0)",
   "opentelemetry-api (>=1.33,<2)",
   "opentelemetry-exporter-otlp (>=1.33,<2)",
   "opentelemetry-sdk (>=1.33,<2)",
@@ -22,7 +22,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
 codepress = "*"
-fastapi = "0.110,<1"
+fastapi = { extras = ["standard"], version = "0.115,<1" }
 isort = "^6.0.1"
 json-repair = ">=0.1,<1"
 openai = ">=1,<2"
