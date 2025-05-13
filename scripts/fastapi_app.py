@@ -1,7 +1,8 @@
-# PYTHONPATH=. fastapi dev scripts/fastapi_app.py
+# scripts/fastapi_app.py
 import asyncio
 
 import fastapi
+import httpx
 import logfire
 from opentelemetry import trace
 
@@ -13,13 +14,13 @@ anyot.configure(
     otel_resource_attributes=anyot.OtelResourceAttributes(service_name="anyot"),
     use_logfire=True,
     send_to_logfire=False,
+    distributed_tracing=True,
 )
-
 
 app = fastapi.FastAPI()
 
-
 logfire.instrument_fastapi(app)
+logfire.instrument_httpx()
 
 
 async def handle_request(request: fastapi.Request):
@@ -41,10 +42,20 @@ async def handle_request(request: fastapi.Request):
 
         await asyncio.sleep(0.5)
 
-        return None
-
 
 @app.get("/")
 async def read_root(request: fastapi.Request):
     await handle_request(request)
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            str(request.url.replace(path="/callback")), timeout=1
+        )
+        response.raise_for_status()
+
     return {"message": "Hello, World!"}
+
+
+@app.get("/callback")
+async def read_callback(request: fastapi.Request):
+    return {"message": "Callback received"}

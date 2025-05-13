@@ -182,6 +182,7 @@ def configure(
     use_logfire: bool = True,
     send_to_logfire: bool = False,
     use_noop_tracer_provider_if_unhealthy: bool = True,
+    distributed_tracing: bool = False,
 ):
     otel_resource_attributes = (
         OtelResourceAttributes.from_string(otel_resource_attributes)
@@ -213,6 +214,7 @@ def configure(
             service_name=otel_resource_attributes.service_name,
             service_version=otel_resource_attributes.service_version,
             environment=otel_resource_attributes.deployment_environment,
+            distributed_tracing=distributed_tracing,
         )
     else:
         opentelemetry.trace.set_tracer_provider(tracer_provider)
