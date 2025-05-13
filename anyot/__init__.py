@@ -7,6 +7,7 @@ from typing import Dict, Optional
 import opentelemetry.sdk.resources
 import opentelemetry.sdk.trace
 import opentelemetry.trace
+import requests
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -84,9 +85,33 @@ def get_tracer_provider(
         endpoint=otel_exporter_otlp_endpoint,
     )
 
+    is_otlp_exporter_healthy = ping_otel_exporter_otlp_endpoint(otlp_exporter._endpoint)
+    if not is_otlp_exporter_healthy:
+        raise ValueError(
+            f"OTEL_EXPORTER_OTLP_ENDPOINT is not healthy: {otel_exporter_otlp_endpoint}"
+        )
+
     provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
     return provider
+
+
+def ping_otel_exporter_otlp_endpoint(otel_exporter_otlp_endpoint: str) -> bool:
+    try:
+        res = requests.get(otel_exporter_otlp_endpoint)
+        res.raise_for_status()
+        return True
+    except requests.exceptions.HTTPError as e:
+        res = e.response
+        if res.status_code == 405:  # Method not allowed
+            return True
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error pinging OTEL_EXPORTER_OTLP_ENDPOINT: {e}")
+        return False
+    except Exception as e:
+        logger.exception(e)
+        return False
 
 
 def configure(
