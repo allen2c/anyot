@@ -30,7 +30,7 @@ class Resource(BaseModel):
 
 class Scope(BaseModel):
     name: str
-    version: str
+    version: str | None = None
 
 
 class Status(BaseModel):
@@ -126,10 +126,11 @@ class TempoClient(httpx.Client):
     def get_trace(self, trace_id: str) -> TraceV2Response:
         res = self.get(f"/api/v2/traces/{trace_id}")
         res.raise_for_status()
-        return TraceV2Response.model_validate_json(res.json())
+        return TraceV2Response.model_validate(res.json())
 
     def search_traces(
         self,
+        service_name: str,
         *,
         q: Optional[str] = None,
         tags: Optional[str] = None,
@@ -144,8 +145,9 @@ class TempoClient(httpx.Client):
         Search for traces using either TraceQL queries or tag-based search.
 
         Args:
+            service_name: Required service name to search for
             q: TraceQL query (URL encoded)
-            tags: logfmt encoding of span-level or process-level attributes
+            tags: Additional logfmt encoding of span-level or process-level attributes
             min_duration: Find traces with at least this duration (e.g., "100ms", "30s")
             max_duration: Find traces with no greater than this duration
             limit: Limit the number of search results (default 20)
@@ -156,11 +158,18 @@ class TempoClient(httpx.Client):
         Returns:
             SearchResponse containing traces and metrics
         """
+        # Build tags parameter with service name
+        service_tag = f"service.name={service_name}"
+        if tags is not None:
+            merged_tags = f"{service_tag} {tags}"
+        else:
+            merged_tags = service_tag
+
         params = {}
         if q is not None:
             params["q"] = q
-        if tags is not None:
-            params["tags"] = tags
+        # Always include tags with service name
+        params["tags"] = merged_tags
         if min_duration is not None:
             params["minDuration"] = min_duration
         if max_duration is not None:
@@ -176,5 +185,4 @@ class TempoClient(httpx.Client):
 
         res = self.get("/api/search", params=params)
         res.raise_for_status()
-
         return SearchResponse.model_validate(res.json())
