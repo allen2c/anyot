@@ -62,6 +62,7 @@ tools: typing.Dict[str, typing.Tuple[FunctionTool, typing.Callable[..., str]]] =
 
 def handle_function_call(name: str, arguments: typing.Dict[str, typing.Any]) -> str:
     with tracer.start_as_current_span("handle_function_call"):
+
         if name not in tools:
             raise ValueError(f"Function {name} not found")
         return tools[name][1](**arguments)
@@ -77,14 +78,23 @@ def handel_openai_response_output(
         tool_call = response.output[0]
         message.append(tool_call.model_dump())  # type: ignore
 
-        print(
-            f"\nFunction call: {tool_call.name}, " + f"arguments: {tool_call.arguments}"
-        )
+        with tracer.start_as_current_span("message.created") as span:
+            span.set_attribute("role", "assistant")
+            span.set_attribute("content", tool_call.model_dump_json())
+            print(
+                f"\nFunction call: {tool_call.name}, "
+                + f"arguments: {tool_call.arguments}"
+            )
+
         _tool_output = handle_function_call(
             tool_call.name,
             json_repair.loads(tool_call.arguments),  # type: ignore
         )
-        print(f"\nTool output: {_tool_output}")
+
+        with tracer.start_as_current_span("message.created") as span:
+            span.set_attribute("role", "tool")
+            span.set_attribute("content", _tool_output)
+            print(f"\nTool output: {_tool_output}")
 
         message.append(
             FunctionCallOutput(
@@ -117,13 +127,16 @@ def main():
             "What time is it in Taipei?",
         ]:
             print(f"\nUser: {_input}")
+            with tracer.start_as_current_span("message.created") as span:
+                span.set_attribute("role", "user")
+                span.set_attribute("content", _input)
 
             input_message: ResponseInputParam = []
             input_message.append(EasyInputMessageParam(role="user", content=_input))
 
             openai_responses = openai_client.responses.create(
                 input=input_message,
-                model="gpt-4o-mini",
+                model="gpt-4.1-nano",
                 instructions=instructions,
                 tools=[
                     json.loads(tool[0].model_dump_json()) for tool in tools.values()
@@ -140,16 +153,17 @@ def main():
             )
 
             if openai_responses.output[0].type == "message":
-                print(
-                    "\nAssistant: "
-                    + "\n".join(
+                with tracer.start_as_current_span("message.created") as span:
+                    _content = "\n\n".join(
                         [
                             _content.text
                             for _content in openai_responses.output[0].content
                             if _content.type == "output_text"
                         ]
                     )
-                )
+                    span.set_attribute("role", "assistant")
+                    span.set_attribute("content", _content)
+                    print("\nAssistant: " + _content)
 
 
 if __name__ == "__main__":
